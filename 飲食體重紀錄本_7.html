@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>飲食與體重紀錄本</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --paper: #F4EFE6;
+    --card: #FBF8F2;
+    --line: #E7E1D4;
+    --ink: #3A362E;
+    --stone: #9C9686;
+    --stone-light: #B0A99A;
+    --clay: #B8794F;
+    --gold: #C4A265;
+    --moss: #6B7157;
+    --moss-bg: #EEF0E6;
+    --clay-bg: #F5E9DD;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Noto Sans TC', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .page {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .eyebrow { font-size: 11px; letter-spacing: 0.12em; color: var(--stone); }
+  .title { font-family: 'Noto Serif TC', serif; font-weight: 700; font-size: 20px; color: var(--ink); }
+  .icon-btn {
+    background: #EEEAE0; border: none; border-radius: 10px;
+    width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 14px;
+    animation: fadeIn .35s ease both;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px);} to { opacity: 1; transform: translateY(0);} }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .section-title { font-size: 13px; font-weight: 700; color: var(--ink); display:flex; align-items:center; gap:6px; }
+  .summary-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+  .summary-card {
+    flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 10px; text-align: center;
+  }
+  .summary-label { font-size: 11px; color: var(--stone); margin-bottom: 4px; }
+  .summary-value { font-family: 'Noto Serif TC', serif; font-size: 22px; font-weight: 700; line-height: 1.1; }
+  .summary-unit { font-size: 10px; color: var(--stone-light); margin-top: 2px; }
+  .summary-target { font-size: 10px; margin-top: 4px; font-weight: 700; }
+  input, select {
+    border: 1px solid var(--line);
+    background: #FFFDFA;
+    border-radius: 10px;
+    padding: 9px 10px;
+    font-size: 14px;
+    color: var(--ink);
+    font-family: 'Noto Sans TC', sans-serif;
+    width: 100%;
+  }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+  ::placeholder { color: var(--stone-light); }
+  .row { display: flex; gap: 8px; }
+  .row + .row { margin-top: 8px; }
+  button.primary {
+    background: var(--moss); color: var(--paper); border: none; border-radius: 10px;
+    padding: 0 18px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+  }
+  button.primary-icon {
+    background: var(--moss); border: none; border-radius: 10px; width: 40px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+    color: var(--paper); font-size: 18px; font-weight: 700;
+  }
+  .meal-row {
+    display: flex; align-items: center; gap: 8px; padding: 7px 0;
+    border-bottom: 1px solid #EFEAE0; font-size: 13px;
+  }
+  .meal-tag {
+    background: var(--moss-bg); color: var(--moss); font-size: 11px; font-weight: 700;
+    border-radius: 6px; padding: 2px 7px; flex-shrink: 0;
+  }
+  .meal-item { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .meal-kcal { color: var(--stone); font-size: 12px; flex-shrink: 0; }
+  .delete-btn {
+    background: none; border: none; cursor: pointer; padding: 4px; color: var(--stone-light);
+    font-size: 14px; line-height: 1;
+  }
+  .edit-btn {
+    background: none; border: none; cursor: pointer; padding: 4px; color: var(--clay);
+    font-size: 13px; line-height: 1;
+  }
+  .delta-tag { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px; }
+  .history-toggle {
+    width: 100%; background: none; border: none; padding: 0; display: flex;
+    align-items: center; justify-content: space-between; cursor: pointer; color: var(--ink);
+  }
+  .history-day { margin-top: 10px; padding-top: 8px; border-top: 1px solid #EFEAE0; }
+  .history-day-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .history-date { font-size: 12px; font-weight: 700; }
+  .history-meta { font-size: 12px; color: var(--stone); }
+  .empty-text { font-size: 12px; color: var(--stone-light); padding: 8px 0; }
+  .footer { text-align: center; font-size: 11px; color: var(--stone-light); margin-top: 8px; }
+  .mini-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .mini-label { font-size: 11px; color: var(--stone); }
+  .hidden { display: none !important; }
+  canvas { width: 100% !important; }
+  .photo-upload-zone {
+    border: 1.5px dashed var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    background: #FFFDFA;
+    cursor: pointer;
+  }
+  .photo-placeholder {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    color: var(--stone); font-size: 12px;
+  }
+  #photoPreviewWrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  #photoPreview { max-width: 100%; max-height: 220px; border-radius: 10px; object-fit: cover; }
+  .remove-photo-btn {
+    background: #EEEAE0; border: none; border-radius: 8px; padding: 5px 12px;
+    font-size: 12px; color: var(--ink); cursor: pointer;
+  }
+  .ai-note {
+    font-size: 11.5px; color: var(--stone); background: var(--clay-bg);
+    border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; line-height: 1.5;
+  }
+  .meal-photo-thumb {
+    width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; cursor: pointer;
+  }
+  .login-overlay {
+    position: fixed; inset: 0; background: var(--paper);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; z-index: 50;
+  }
+  .login-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+    padding: 28px 22px; max-width: 340px; width: 100%;
+  }
+  .login-title {
+    font-family: 'Noto Serif TC', serif; font-weight: 700; font-size: 19px;
+    text-align: center; margin-bottom: 4px;
+  }
+  .login-sub { font-size: 12px; color: var(--stone); text-align: center; margin-bottom: 18px; }
+  .login-error { font-size: 12px; color: #B8794F; margin-top: 8px; min-height: 16px; }
+  .login-btn-row { display: flex; gap: 8px; margin-top: 12px; }
+  button.secondary {
+    background: #EEEAE0; color: var(--ink); border: none; border-radius: 10px;
+    padding: 0 16px; height: 38px; font-size: 13px; font-weight: 700; cursor: pointer; flex: 1;
+  }
+  .user-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; color: var(--stone); margin-bottom: 10px;
+  }
+  .signout-link { background: none; border: none; color: var(--clay); font-size: 11px; cursor: pointer; text-decoration: underline; }
+  .sync-status { font-size: 10px; color: var(--stone-light); }
+  #appRoot { display: none; }
+</style>
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <div class="login-title">飲食與體重紀錄本</div>
+    <div class="login-sub">登入後資料會同步到雲端，任何裝置都能繼續編輯</div>
+    <label class="mini-field" style="margin-bottom:8px;">
+      <span class="mini-label">Email</span>
+      <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="username" />
+    </label>
+    <label class="mini-field">
+      <span class="mini-label">密碼</span>
+      <input type="password" id="loginPassword" placeholder="至少 6 碼" autocomplete="current-password" />
+    </label>
+    <div class="login-btn-row">
+      <button class="secondary" id="signupBtn">第一次使用，註冊</button>
+      <button class="primary" id="signinBtn" style="flex:1;">登入</button>
+    </div>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div id="appRoot">
+<div class="page">
+
+  <div class="user-bar">
+    <span id="userEmailLabel"></span>
+    <span style="display:flex; align-items:center; gap:10px;">
+      <span class="sync-status" id="syncStatus"></span>
+      <button class="signout-link" id="signoutBtn">登出</button>
+    </span>
+  </div>
+
+  <div class="header">
+    <div class="header-left">
+      <svg width="40" height="40" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M 78 50 A 28 28 0 1 1 50 22" fill="none" stroke="#B8794F" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 50 22 A 28 28 0 0 1 72 34" fill="none" stroke="#C4A265" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="72" cy="34" r="2.2" fill="#C4A265"/>
+      </svg>
+      <div>
+        <div class="eyebrow">紀錄本</div>
+        <div class="title">飲食與體重</div>
+      </div>
+    </div>
+    <button class="icon-btn" id="settingsToggle" aria-label="目標設定">⚙</button>
+  </div>
+
+  <div class="card hidden" id="settingsCard">
+    <div class="summary-label">目標設定</div>
+    <div class="row" style="margin-top:8px;">
+      <label class="mini-field">
+        <span class="mini-label">目標體重 (kg)</span>
+        <input type="number" step="0.1" id="goalWeight" placeholder="例如 52" />
+      </label>
+      <label class="mini-field">
+        <span class="mini-label">每日熱量目標 (kcal)</span>
+        <input type="number" id="kcalTarget" placeholder="例如 1300" />
+      </label>
+    </div>
+    <div class="row" style="margin-top:8px;">
+      <label class="mini-field">
+        <span class="mini-label">每日蛋白質目標 (g)</span>
+        <input type="number" id="proteinTarget" placeholder="例如 90" />
+      </label>
+    </div>
+  </div>
+
+  <div class="summary-row">
+    <div class="summary-card">
+      <div class="summary-label">今日熱量</div>
+      <div class="summary-value" id="sumKcal">0</div>
+      <div class="summary-unit">kcal</div>
+      <div class="summary-target" id="kcalTargetNote"></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">今日蛋白質</div>
+      <div class="summary-value" id="sumProtein">0</div>
+      <div class="summary-unit">g</div>
+      <div class="summary-target" id="proteinTargetNote"></div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">今日體重</div>
+      <div class="summary-value" id="sumWeight">—</div>
+      <div class="summary-unit">kg</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">今日體脂肪</div>
+      <div class="summary-value" id="sumBodyFat">—</div>
+      <div class="summary-unit">%</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <span class="section-title">⚖ 記錄體重與體脂肪</span>
+    </div>
+    <div class="row">
+      <label class="mini-field">
+        <span class="mini-label">日期</span>
+        <input type="date" id="weightDate" />
+      </label>
+    </div>
+    <div class="row">
+      <input type="number" step="0.1" id="weightInput" placeholder="體重 kg" style="flex:1" />
+      <input type="number" step="0.1" id="bodyFatInput" placeholder="體脂肪 %（選填）" style="flex:1" />
+      <button class="primary" id="saveWeightBtn">儲存</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <span class="section-title">🍚 新增餐點</span>
+    </div>
+
+    <div class="photo-upload-zone" id="photoZone">
+      <input type="file" id="photoInput" accept="image/*" capture="environment" class="hidden" />
+      <div id="photoPlaceholder" class="photo-placeholder">
+        <span style="font-size:20px;">📷</span>
+        <span>上傳餐點照片（選填）</span>
+      </div>
+      <div id="photoPreviewWrap" class="hidden">
+        <img id="photoPreview" alt="餐點照片" />
+        <button type="button" id="removePhotoBtn" class="remove-photo-btn">移除照片</button>
+      </div>
+    </div>
+    <div class="ai-note">
+      💡 想讓 AI 幫忙辨識照片內容並估算熱量？把照片傳到跟 Claude 的對話裡，判讀完再把數字填回下面欄位即可。
+    </div>
+
+    <div class="row">
+      <select id="mealName" style="width:90px; flex-shrink:0;">
+        <option value="早餐">早餐 (7-10點)</option>
+        <option value="午餐">午餐 (11-12點)</option>
+        <option value="晚餐">晚餐 (18-21點)</option>
+        <option value="點心">點心 (其他時段)</option>
+      </select>
+      <input id="mealItem" placeholder="品項，例如：鮭魚佐海帶芽" style="flex:1" />
+    </div>
+    <div class="row" id="editingBanner" style="display:none; align-items:center; justify-content:space-between; background: var(--moss-bg); border-radius:8px; padding:6px 10px; margin-bottom:8px;">
+      <span style="font-size:12px; color: var(--moss); font-weight:700;">✎ 編輯模式</span>
+      <button type="button" id="cancelEditBtn" style="background:none;border:none;color:var(--moss);font-size:12px;cursor:pointer;text-decoration:underline;">取消編輯</button>
+    </div>
+    <div class="row">
+      <input type="number" id="mealKcal" placeholder="熱量 kcal" style="flex:1" />
+      <input type="number" id="mealProtein" placeholder="蛋白質 g（選填）" style="flex:1" />
+      <button class="primary-icon" id="addMealBtn" aria-label="新增">＋</button>
+    </div>
+    <div id="todayMeals" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card hidden" id="weightChartCard">
+    <div class="section-header">
+      <span class="section-title">體重趨勢</span>
+      <span class="delta-tag" id="weightDelta"></span>
+    </div>
+    <canvas id="weightChart" height="180"></canvas>
+  </div>
+
+  <div class="card hidden" id="kcalChartCard">
+    <div class="section-header">
+      <span class="section-title">每日熱量趨勢</span>
+    </div>
+    <canvas id="kcalChart" height="180"></canvas>
+  </div>
+
+  <div class="card">
+    <button class="history-toggle" id="historyToggle">
+      <span class="section-title">歷史紀錄</span>
+      <span id="historyChevron">▾</span>
+    </button>
+    <div id="historyList" class="hidden" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="footer" id="footerNote">紀錄會同步儲存到雲端</div>
+
+</div>
+</div>
+
+<script>
+  // ---------- Firebase setup ----------
+  // 1. 到 https://console.firebase.google.com 建立專案
+  // 2. 新增一個「Web」App，把設定值貼到下面 firebaseConfig
+  // 3. 在 Authentication -> Sign-in method 開啟「電子郵件/密碼」
+  // 4. 建立 Firestore Database（正式版模式），並設定安全規則（教學文件裡有附規則）
+  const firebaseConfig = {
+    apiKey: "AIzaSyC75PPAeX89oqd6FMtrvrcNxjt9S68fSzY",
+    authDomain: "diet-tracker-c34b1.firebaseapp.com",
+    projectId: "diet-tracker-c34b1",
+    storageBucket: "diet-tracker-c34b1.firebasestorage.app",
+    messagingSenderId: "184445443607",
+    appId: "1:184445443607:web:63010ded9ee87c65c58652",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  let store = { days: {}, settings: { goalWeight: '51', kcalTarget: '1200', proteinTarget: '100' } };
+  let currentUid = null;
+  let dataLoaded = false;
+
+  async function loadAllData() {
+    const settingsSnap = await db.collection('users').doc(currentUid).collection('meta').doc('settings').get();
+    if (settingsSnap.exists) {
+      store.settings = { goalWeight: '51', kcalTarget: '1200', proteinTarget: '100', ...settingsSnap.data() };
+    } else {
+      store.settings = { goalWeight: '51', kcalTarget: '1200', proteinTarget: '100' };
+      await saveSettings(); // persist the defaults right away so nothing needs manual entry
+    }
+
+    const daysSnap = await db.collection('users').doc(currentUid).collection('days').get();
+    store.days = {};
+    daysSnap.forEach(docSnap => {
+      store.days[docSnap.id] = { weight: null, bodyFat: null, meals: [], ...docSnap.data() };
+    });
+  }
+
+  function setSyncStatus(text) {
+    const el = document.getElementById('syncStatus');
+    if (el) el.textContent = text;
+  }
+
+  async function saveSettings() {
+    setSyncStatus('儲存中…');
+    try {
+      await db.collection('users').doc(currentUid).collection('meta').doc('settings').set(store.settings);
+      setSyncStatus('已同步');
+    } catch (e) {
+      console.error('save settings failed', e);
+      setSyncStatus('同步失敗，請檢查網路');
+    }
+  }
+
+  async function saveDay(dateKey) {
+    setSyncStatus('儲存中…');
+    try {
+      const data = store.days[dateKey] || emptyDay();
+      await db.collection('users').doc(currentUid).collection('days').doc(dateKey).set(data);
+      setSyncStatus('已同步');
+    } catch (e) {
+      console.error('save day failed', e);
+      setSyncStatus('同步失敗，請檢查網路');
+    }
+  }
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function fmtLabel(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+  function emptyDay() { return { weight: null, bodyFat: null, meals: [] }; }
+
+  // 依時間判斷餐別：早餐7:00-10:00／午餐11:00-12:00／晚餐18:00-21:00／其餘為點心
+  function getMealTypeByTime(date) {
+    const mins = date.getHours() * 60 + date.getMinutes();
+    const inRange = (h1, m1, h2, m2) => mins >= h1 * 60 + m1 && mins <= h2 * 60 + m2;
+    if (inRange(7, 0, 10, 0)) return '早餐';
+    if (inRange(11, 0, 12, 0)) return '午餐';
+    if (inRange(18, 0, 21, 0)) return '晚餐';
+    return '點心';
+  }
+
+  const today = todayStr();
+  if (!store.days[today]) store.days[today] = emptyDay();
+
+  let pendingPhoto = null; // dataURL of the currently-attached (not yet saved) photo
+
+  // ---------- DOM refs ----------
+  const els = {
+    settingsToggle: document.getElementById('settingsToggle'),
+    settingsCard: document.getElementById('settingsCard'),
+    goalWeight: document.getElementById('goalWeight'),
+    kcalTarget: document.getElementById('kcalTarget'),
+    proteinTarget: document.getElementById('proteinTarget'),
+    sumKcal: document.getElementById('sumKcal'),
+    kcalTargetNote: document.getElementById('kcalTargetNote'),
+    sumProtein: document.getElementById('sumProtein'),
+    proteinTargetNote: document.getElementById('proteinTargetNote'),
+    sumWeight: document.getElementById('sumWeight'),
+    sumBodyFat: document.getElementById('sumBodyFat'),
+    weightDate: document.getElementById('weightDate'),
+    weightInput: document.getElementById('weightInput'),
+    bodyFatInput: document.getElementById('bodyFatInput'),
+    saveWeightBtn: document.getElementById('saveWeightBtn'),
+    mealName: document.getElementById('mealName'),
+    mealItem: document.getElementById('mealItem'),
+    mealKcal: document.getElementById('mealKcal'),
+    mealProtein: document.getElementById('mealProtein'),
+    addMealBtn: document.getElementById('addMealBtn'),
+    editingBanner: document.getElementById('editingBanner'),
+    cancelEditBtn: document.getElementById('cancelEditBtn'),
+    todayMeals: document.getElementById('todayMeals'),
+    photoZone: document.getElementById('photoZone'),
+    photoInput: document.getElementById('photoInput'),
+    photoPlaceholder: document.getElementById('photoPlaceholder'),
+    photoPreviewWrap: document.getElementById('photoPreviewWrap'),
+    photoPreview: document.getElementById('photoPreview'),
+    removePhotoBtn: document.getElementById('removePhotoBtn'),
+    weightChartCard: document.getElementById('weightChartCard'),
+    kcalChartCard: document.getElementById('kcalChartCard'),
+    weightDelta: document.getElementById('weightDelta'),
+    historyToggle: document.getElementById('historyToggle'),
+    historyChevron: document.getElementById('historyChevron'),
+    historyList: document.getElementById('historyList'),
+  };
+
+  let weightChart = null;
+  let kcalChart = null;
+
+  // ---------- settings ----------
+  els.settingsToggle.addEventListener('click', () => {
+    els.settingsCard.classList.toggle('hidden');
+  });
+  els.goalWeight.addEventListener('input', () => {
+    store.settings.goalWeight = els.goalWeight.value;
+    saveSettings();
+    renderCharts();
+  });
+  els.kcalTarget.addEventListener('input', () => {
+    store.settings.kcalTarget = els.kcalTarget.value;
+    saveSettings();
+    renderCharts();
+    renderSummary();
+  });
+  els.proteinTarget.addEventListener('input', () => {
+    store.settings.proteinTarget = els.proteinTarget.value;
+    saveSettings();
+    renderSummary();
+  });
+
+  // ---------- weight ----------
+  els.weightDate.value = today;
+  els.weightDate.max = today; // no future dates
+
+  els.saveWeightBtn.addEventListener('click', () => {
+    const dateKey = els.weightDate.value || today;
+    const val = parseFloat(els.weightInput.value);
+    const fat = parseFloat(els.bodyFatInput.value);
+    if (!val || val <= 0) return;
+    if (!store.days[dateKey]) store.days[dateKey] = emptyDay();
+    store.days[dateKey].weight = val;
+    store.days[dateKey].bodyFat = isNaN(fat) ? null : fat;
+    saveDay(dateKey);
+    els.weightInput.value = '';
+    els.bodyFatInput.value = '';
+    renderAll();
+  });
+
+  // ---------- photo upload ----------
+  els.photoZone.addEventListener('click', (e) => {
+    if (e.target === els.removePhotoBtn) return;
+    els.photoInput.click();
+  });
+
+  els.photoInput.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        // resize down to keep localStorage light
+        const maxW = 640;
+        const scale = Math.min(1, maxW / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        pendingPhoto = canvas.toDataURL('image/jpeg', 0.75);
+
+        els.photoPreview.src = pendingPhoto;
+        els.photoPlaceholder.classList.add('hidden');
+        els.photoPreviewWrap.classList.remove('hidden');
+
+        // auto-set meal type based on the moment the photo was uploaded
+        els.mealName.value = getMealTypeByTime(new Date());
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  els.removePhotoBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pendingPhoto = null;
+    els.photoInput.value = '';
+    els.photoPlaceholder.classList.remove('hidden');
+    els.photoPreviewWrap.classList.add('hidden');
+  });
+
+  // ---------- meals (add + edit) ----------
+  let editingMeal = null; // { dateKey, id } or null when adding new
+
+  function resetMealForm() {
+    els.mealItem.value = '';
+    els.mealKcal.value = '';
+    els.mealProtein.value = '';
+    els.mealName.value = getMealTypeByTime(new Date());
+    pendingPhoto = null;
+    els.photoInput.value = '';
+    els.photoPlaceholder.classList.remove('hidden');
+    els.photoPreviewWrap.classList.add('hidden');
+    editingMeal = null;
+    els.editingBanner.style.display = 'none';
+    els.addMealBtn.textContent = '＋';
+  }
+
+  els.addMealBtn.addEventListener('click', () => {
+    const item = els.mealItem.value.trim();
+    const kcal = parseFloat(els.mealKcal.value);
+    if (!item || !kcal) return;
+
+    let affectedDate = today;
+    if (editingMeal) {
+      affectedDate = editingMeal.dateKey;
+      const dayMeals = store.days[editingMeal.dateKey]?.meals || [];
+      const idx = dayMeals.findIndex(m => m.id === editingMeal.id);
+      if (idx !== -1) {
+        dayMeals[idx] = {
+          ...dayMeals[idx],
+          name: els.mealName.value,
+          item,
+          kcal: kcal || 0,
+          protein: parseFloat(els.mealProtein.value) || 0,
+          photo: pendingPhoto !== null ? pendingPhoto : dayMeals[idx].photo,
+        };
+      }
+    } else {
+      const entry = {
+        id: Date.now().toString(),
+        name: els.mealName.value,
+        item,
+        kcal: kcal || 0,
+        protein: parseFloat(els.mealProtein.value) || 0,
+        photo: pendingPhoto || null,
+      };
+      if (!store.days[today]) store.days[today] = emptyDay();
+      store.days[today].meals.push(entry);
+    }
+    saveDay(affectedDate);
+    resetMealForm();
+    renderAll();
+  });
+
+  els.cancelEditBtn.addEventListener('click', () => {
+    resetMealForm();
+  });
+
+  function editMeal(dateKey, id) {
+    const meal = store.days[dateKey]?.meals.find(m => m.id === id);
+    if (!meal) return;
+    editingMeal = { dateKey, id };
+    els.mealName.value = meal.name;
+    els.mealItem.value = meal.item;
+    els.mealKcal.value = meal.kcal;
+    els.mealProtein.value = meal.protein || '';
+    pendingPhoto = meal.photo || null;
+    if (meal.photo) {
+      els.photoPreview.src = meal.photo;
+      els.photoPlaceholder.classList.add('hidden');
+      els.photoPreviewWrap.classList.remove('hidden');
+    } else {
+      els.photoPlaceholder.classList.remove('hidden');
+      els.photoPreviewWrap.classList.add('hidden');
+    }
+    els.editingBanner.style.display = 'flex';
+    els.addMealBtn.textContent = '✓';
+    els.mealItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  window.__editMeal = editMeal;
+
+  function deleteMeal(dateKey, id) {
+    if (!store.days[dateKey]) return;
+    store.days[dateKey].meals = store.days[dateKey].meals.filter(m => m.id !== id);
+    saveDay(dateKey);
+    renderAll();
+  }
+  window.__deleteMeal = deleteMeal;
+
+  function mealRowHtml(dateKey, m) {
+    const thumb = m.photo
+      ? `<img src="${m.photo}" class="meal-photo-thumb" onclick="__viewPhoto('${m.photo}')" alt="照片" />`
+      : '';
+    return `<div class="meal-row">
+      ${thumb}
+      <span class="meal-tag">${m.name}</span>
+      <span class="meal-item">${escapeHtml(m.item)}</span>
+      <span class="meal-kcal">${m.kcal} kcal</span>
+      <button class="edit-btn" onclick="__editMeal('${dateKey}','${m.id}')" aria-label="編輯">✎</button>
+      <button class="delete-btn" onclick="__deleteMeal('${dateKey}','${m.id}')" aria-label="刪除">✕</button>
+    </div>`;
+  }
+  window.__viewPhoto = (src) => {
+    const w = window.open('');
+    if (w) w.document.write(`<img src="${src}" style="max-width:100%;">`);
+  };
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ---------- history toggle ----------
+  let historyOpen = false;
+  els.historyToggle.addEventListener('click', () => {
+    historyOpen = !historyOpen;
+    els.historyList.classList.toggle('hidden', !historyOpen);
+    els.historyChevron.textContent = historyOpen ? '▴' : '▾';
+  });
+
+  // ---------- render ----------
+  function renderSummary() {
+    const d = store.days[today] || emptyDay();
+    const kcal = d.meals.reduce((s, m) => s + m.kcal, 0);
+    const protein = d.meals.reduce((s, m) => s + m.protein, 0);
+    els.sumKcal.textContent = kcal || 0;
+    els.sumProtein.textContent = protein || 0;
+    els.sumWeight.textContent = d.weight != null ? d.weight : '—';
+    els.sumBodyFat.textContent = d.bodyFat != null ? d.bodyFat : '—';
+
+    const kcalTarget = parseFloat(store.settings.kcalTarget);
+    if (!isNaN(kcalTarget) && kcalTarget > 0) {
+      const remain = +(kcalTarget - kcal).toFixed(0);
+      els.kcalTargetNote.textContent = remain >= 0 ? `剩 ${remain}` : `超出 ${Math.abs(remain)}`;
+      els.kcalTargetNote.style.color = remain >= 0 ? '#6B7157' : '#B8794F';
+    } else {
+      els.kcalTargetNote.textContent = '';
+    }
+
+    const proteinTarget = parseFloat(store.settings.proteinTarget);
+    if (!isNaN(proteinTarget) && proteinTarget > 0) {
+      const pct = Math.min(100, Math.round((protein / proteinTarget) * 100));
+      els.proteinTargetNote.textContent = `${pct}% / ${proteinTarget}g`;
+      els.proteinTargetNote.style.color = protein >= proteinTarget ? '#6B7157' : '#9C9686';
+    } else {
+      els.proteinTargetNote.textContent = '';
+    }
+  }
+
+  function renderTodayMeals() {
+    const d = store.days[today] || emptyDay();
+    els.todayMeals.innerHTML = d.meals.map(m => mealRowHtml(today, m)).join('');
+  }
+
+  function sortedDates() {
+    return Object.keys(store.days).sort();
+  }
+
+  function renderCharts() {
+    const dates = sortedDates();
+    const weightRows = dates.filter(d => store.days[d].weight != null);
+    const weightData = weightRows.map(d => ({
+      date: d,
+      label: fmtLabel(d),
+      value: store.days[d].weight,
+      bodyFat: store.days[d].bodyFat != null ? store.days[d].bodyFat : null,
+    }));
+    const hasBodyFat = weightData.some(p => p.bodyFat != null);
+    const kcalData = dates.map(d => ({
+      label: fmtLabel(d),
+      value: store.days[d].meals.reduce((s, m) => s + m.kcal, 0),
+    }));
+
+    // weight chart
+    const showWeightChart = weightData.length > 0;
+    els.weightChartCard.classList.toggle('hidden', !showWeightChart);
+    if (showWeightChart) {
+      requestAnimationFrame(() => {
+        const ctx = document.getElementById('weightChart').getContext('2d');
+        const goal = parseFloat(store.settings.goalWeight);
+        const datasets = [{
+          label: '體重 (kg)',
+          data: weightData.map(p => p.value),
+          borderColor: '#B8794F',
+          backgroundColor: '#B8794F',
+          tension: 0.35,
+          pointRadius: 3,
+          borderWidth: 2.5,
+          yAxisID: 'y',
+          spanGaps: true,
+        }];
+        if (!isNaN(goal)) {
+          datasets.push({
+            label: '目標體重',
+            data: weightData.map(() => goal),
+            borderColor: '#C4A265',
+            borderDash: [4, 4],
+            pointRadius: 0,
+            borderWidth: 1.5,
+            yAxisID: 'y',
+          });
+        }
+        if (hasBodyFat) {
+          datasets.push({
+            label: '體脂肪 (%)',
+            data: weightData.map(p => p.bodyFat),
+            borderColor: '#6B7157',
+            backgroundColor: '#6B7157',
+            tension: 0.35,
+            pointRadius: 3,
+            borderWidth: 2.5,
+            yAxisID: 'y1',
+            spanGaps: true,
+          });
+        }
+        if (weightChart) weightChart.destroy();
+        const scales = {
+          x: { grid: { display: false }, ticks: { color: '#9C9686', font: { size: 11 } } },
+          y: {
+            grid: { color: '#E7E1D4' },
+            ticks: { color: '#B8794F', font: { size: 11 } },
+            title: { display: true, text: 'kg', color: '#B8794F', font: { size: 10 } },
+          },
+        };
+        if (hasBodyFat) {
+          scales.y1 = {
+            position: 'right',
+            grid: { display: false },
+            ticks: { color: '#6B7157', font: { size: 11 } },
+            title: { display: true, text: '%', color: '#6B7157', font: { size: 10 } },
+          };
+        }
+        weightChart = new Chart(ctx, {
+          type: 'line',
+          data: { labels: weightData.map(p => p.label), datasets },
+          options: {
+            ...chartOptions(),
+            plugins: {
+              ...chartOptions().plugins,
+              legend: { display: hasBodyFat, position: 'top', labels: { boxWidth: 10, font: { size: 11 } } },
+              tooltip: {
+                ...chartOptions().plugins.tooltip,
+                callbacks: {
+                  title: (items) => weightData[items[0].dataIndex]?.date || items[0].label,
+                },
+              },
+            },
+            scales,
+          },
+        });
+      });
+
+      if (weightData.length >= 2) {
+        const delta = +(weightData[weightData.length - 1].value - weightData[0].value).toFixed(1);
+        els.weightDelta.textContent = (delta > 0 ? '+' : '') + delta + ' kg';
+        els.weightDelta.style.color = delta <= 0 ? '#6B7157' : '#B8794F';
+        els.weightDelta.style.background = delta <= 0 ? '#EEF0E6' : '#F5E9DD';
+      } else {
+        els.weightDelta.textContent = '';
+      }
+    }
+
+    // kcal chart
+    const showKcalChart = kcalData.length > 0;
+    els.kcalChartCard.classList.toggle('hidden', !showKcalChart);
+    if (showKcalChart) {
+      requestAnimationFrame(() => {
+        const ctx2 = document.getElementById('kcalChart').getContext('2d');
+        const target = parseFloat(store.settings.kcalTarget);
+        const datasets2 = [{
+          label: '熱量 (kcal)',
+          data: kcalData.map(p => p.value),
+          borderColor: '#6B7157',
+          backgroundColor: '#6B7157',
+          tension: 0.35,
+          pointRadius: 3,
+          borderWidth: 2.5,
+        }];
+        if (!isNaN(target)) {
+          datasets2.push({
+            label: '目標',
+            data: kcalData.map(() => target),
+            borderColor: '#9C9686',
+            borderDash: [4, 4],
+            pointRadius: 0,
+            borderWidth: 1.5,
+          });
+        }
+        if (kcalChart) kcalChart.destroy();
+        kcalChart = new Chart(ctx2, {
+          type: 'line',
+          data: { labels: kcalData.map(p => p.label), datasets: datasets2 },
+          options: chartOptions(),
+        });
+      });
+    }
+  }
+
+  function chartOptions() {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#FBF8F2',
+          titleColor: '#3A362E',
+          bodyColor: '#3A362E',
+          borderColor: '#E7E1D4',
+          borderWidth: 1,
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#9C9686', font: { size: 11 } } },
+        y: { grid: { color: '#E7E1D4' }, ticks: { color: '#9C9686', font: { size: 11 } } },
+      },
+    };
+  }
+
+  function renderHistory() {
+    const dates = [...sortedDates()].reverse();
+    if (dates.length === 0) {
+      els.historyList.innerHTML = '<div class="empty-text">還沒有紀錄</div>';
+      return;
+    }
+    els.historyList.innerHTML = dates.map(dateKey => {
+      const d = store.days[dateKey];
+      const total = d.meals.reduce((s, m) => s + m.kcal, 0);
+      const weightPart = d.weight != null ? `${d.weight} kg` : '';
+      const fatPart = d.bodyFat != null ? `體脂 ${d.bodyFat}%` : '';
+      const bodyMeta = [weightPart, fatPart].filter(Boolean).join(' · ');
+      return `<div class="history-day">
+        <div class="history-day-header">
+          <span class="history-date">${dateKey}</span>
+          <span class="history-meta">${bodyMeta ? bodyMeta + ' · ' : ''}${total} kcal</span>
+        </div>
+        ${d.meals.map(m => mealRowHtml(dateKey, m)).join('')}
+      </div>`;
+    }).join('');
+  }
+
+  function renderAll() {
+    renderSummary();
+    renderTodayMeals();
+    renderCharts();
+    renderHistory();
+  }
+
+  // ---------- auth ----------
+  const loginOverlay = document.getElementById('loginOverlay');
+  const appRoot = document.getElementById('appRoot');
+  const loginEmail = document.getElementById('loginEmail');
+  const loginPassword = document.getElementById('loginPassword');
+  const loginError = document.getElementById('loginError');
+  const signinBtn = document.getElementById('signinBtn');
+  const signupBtn = document.getElementById('signupBtn');
+  const signoutBtn = document.getElementById('signoutBtn');
+  const userEmailLabel = document.getElementById('userEmailLabel');
+
+  function friendlyAuthError(code) {
+    const map = {
+      'auth/invalid-email': 'Email 格式不正確',
+      'auth/user-not-found': '找不到此帳號，請先註冊',
+      'auth/wrong-password': '密碼錯誤',
+      'auth/email-already-in-use': '這個 Email 已經註冊過了，請直接登入',
+      'auth/weak-password': '密碼至少需要 6 碼',
+      'auth/invalid-credential': 'Email 或密碼錯誤',
+      'auth/operation-not-allowed': '尚未在 Firebase 開啟「電子郵件/密碼」登入方式',
+      'auth/unauthorized-domain': '這個網址還沒被 Firebase 授權，請檢查 Authentication → Settings → Authorized domains',
+      'auth/api-key-not-valid.-please-pass-a-valid-api-key.': 'firebaseConfig 裡的 apiKey 不正確',
+      'auth/network-request-failed': '網路連線失敗，請檢查網路',
+    };
+    return (map[code] || '發生錯誤，請再試一次') + (code ? ` (${code})` : '');
+  }
+
+  signinBtn.addEventListener('click', async () => {
+    loginError.textContent = '';
+    try {
+      await auth.signInWithEmailAndPassword(loginEmail.value.trim(), loginPassword.value);
+    } catch (e) {
+      loginError.textContent = friendlyAuthError(e.code);
+    }
+  });
+
+  signupBtn.addEventListener('click', async () => {
+    loginError.textContent = '';
+    try {
+      await auth.createUserWithEmailAndPassword(loginEmail.value.trim(), loginPassword.value);
+    } catch (e) {
+      loginError.textContent = friendlyAuthError(e.code);
+    }
+  });
+
+  signoutBtn.addEventListener('click', async () => {
+    await auth.signOut();
+  });
+
+  function populateFormsFromStore() {
+    els.goalWeight.value = store.settings.goalWeight || '';
+    els.kcalTarget.value = store.settings.kcalTarget || '';
+    els.proteinTarget.value = store.settings.proteinTarget || '';
+    els.mealName.value = getMealTypeByTime(new Date());
+  }
+
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      currentUid = user.uid;
+      userEmailLabel.textContent = user.email || '';
+      loginOverlay.classList.add('hidden');
+      appRoot.style.display = 'block';
+      setSyncStatus('讀取中…');
+      try {
+        await loadAllData();
+        if (!store.days[today]) store.days[today] = emptyDay();
+        dataLoaded = true;
+        populateFormsFromStore();
+        renderAll();
+        setSyncStatus('已同步');
+      } catch (e) {
+        console.error('load data failed', e);
+        setSyncStatus('讀取失敗，請檢查網路或 Firebase 設定');
+      }
+    } else {
+      currentUid = null;
+      dataLoaded = false;
+      appRoot.style.display = 'none';
+      loginOverlay.classList.remove('hidden');
+    }
+  });
+</script>
+
+</body>
+</html>
